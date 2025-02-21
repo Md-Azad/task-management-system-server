@@ -114,7 +114,7 @@ app.get("/", (req, res) => {
   });
 });
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.cn37c5v.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -167,6 +167,24 @@ async function run() {
         if (result.acknowledged) {
           const updatedTasks = await tasksCollection.find().toArray();
           io.emit("tasksUpdated", updatedTasks);
+        }
+      });
+
+      socket.on("updateTask", async (updatedTask) => {
+        console.log(updatedTask.id);
+        try {
+          const result = await tasksCollection.updateOne(
+            { _id: new ObjectId(updatedTask._id) },
+            { $set: { status: updatedTask.status } }
+          );
+          console.log(result);
+
+          if (result.acknowledged) {
+            const updatedTasks = await tasksCollection.find().toArray();
+            io.emit("tasksUpdated", updatedTasks);
+          }
+        } catch (error) {
+          console.error("Error updating task:", error);
         }
       });
 
