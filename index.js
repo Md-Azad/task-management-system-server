@@ -93,7 +93,9 @@ async function run() {
           );
 
           if (result.acknowledged) {
-            const updatedTasks = await tasksCollection.find().toArray();
+            const updatedTasks = await tasksCollection
+              .find({ email: taskData.email })
+              .toArray();
             io.emit("tasksUpdated", updatedTasks);
           }
         } catch (error) {
@@ -109,7 +111,9 @@ async function run() {
           );
 
           if (result.acknowledged) {
-            const updatedTasks = await tasksCollection.find().toArray();
+            const updatedTasks = await tasksCollection
+              .find({ email: updatedTask.email })
+              .toArray();
             io.emit("tasksUpdated", updatedTasks);
           }
         } catch (error) {
@@ -121,9 +125,14 @@ async function run() {
         try {
           const id = _id;
           const query = { _id: id };
+          const task = await tasksCollection.findOne(query);
+
           const result = await tasksCollection.deleteOne(query);
+
           if (result.deletedCount > 0) {
-            const updatedTasks = await tasksCollection.find().toArray();
+            const updatedTasks = await tasksCollection
+              .find({ email: task.email })
+              .toArray();
             io.emit("tasksUpdated", updatedTasks);
           }
         } catch (error) {
