@@ -70,10 +70,13 @@ async function run() {
       console.log("Client connected:", socket.id);
 
       socket.on("addTask", async (taskData) => {
+        const email = taskData.email;
         const result = await tasksCollection.insertOne(taskData);
 
         if (result.acknowledged) {
-          const updatedTasks = await tasksCollection.find().toArray();
+          const updatedTasks = await tasksCollection
+            .find({ email: email })
+            .toArray();
           io.emit("tasksUpdated", updatedTasks);
         }
       });
@@ -106,6 +109,20 @@ async function run() {
           );
 
           if (result.acknowledged) {
+            const updatedTasks = await tasksCollection.find().toArray();
+            io.emit("tasksUpdated", updatedTasks);
+          }
+        } catch (error) {
+          console.error("Error updating task:", error);
+        }
+      });
+
+      socket.on("deleteTask", async (_id) => {
+        try {
+          const id = _id;
+          const query = { _id: id };
+          const result = await tasksCollection.deleteOne(query);
+          if (result.deletedCount > 0) {
             const updatedTasks = await tasksCollection.find().toArray();
             io.emit("tasksUpdated", updatedTasks);
           }
