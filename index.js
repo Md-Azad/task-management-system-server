@@ -1,97 +1,3 @@
-// require("dotenv").config();
-// const express = require("express");
-// const http = require("http");
-// const { Server } = require("socket.io");
-// const app = express();
-// const cors = require("cors");
-
-// const port = process.env.PORT || 3000;
-// const server = http.createServer(app);
-// const io = new Server(server, { cors: { origin: "http://localhost:5173" } });
-
-// app.use(cors());
-// app.use(express.json());
-
-// app.get("/", (req, res) => {
-//   console.log(process.env.DB_USER);
-//   res.send({
-//     status: "success",
-//     message: "the server is running successfully.",
-//   });
-// });
-
-// const { MongoClient, ServerApiVersion } = require("mongodb");
-// const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.cn37c5v.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-
-// // Create a MongoClient with a MongoClientOptions object to set the Stable API version
-// const client = new MongoClient(uri, {
-//   serverApi: {
-//     version: ServerApiVersion.v1,
-//     strict: true,
-//     deprecationErrors: true,
-//   },
-// });
-
-// async function run() {
-//   try {
-//     // Connect the client to the server	(optional starting in v4.7)
-//     await client.connect();
-
-//     const userCollection = client
-//       .db("TaskManagementSystem")
-//       .collection("users");
-//     const tasksCollection = client
-//       .db("TaskManagementSystem")
-//       .collection("tasks");
-
-//     app.post("/users", async (req, res) => {
-//       const user = req.body;
-//       const email = user.email;
-//       const query = { email: email };
-//       const isExistUser = await userCollection.findOne(query);
-//       if (isExistUser) {
-//         return res.send({ message: "user already exist", insertedId: null });
-//       }
-//       const result = await userCollection.insertOne(user);
-//       res.send(result);
-//     });
-
-//     io.on("connection", (socket) => {
-//       console.log("Client connected:", socket.id);
-
-//       // Listen for "addTask" event from client
-//       socket.on("addTask", async (taskData) => {
-//         const result = await tasksCollection.insertOne(taskData);
-
-//         if (result.acknowledged) {
-//           // Fetch updated tasks from DB
-//           const updatedTasks = await tasksCollection.find().toArray();
-
-//           // Emit updated task list to all clients
-//           io.emit("tasksUpdated", updatedTasks);
-//         }
-//       });
-
-//       socket.on("disconnect", () => {
-//         console.log("Client disconnected:", socket.id);
-//       });
-//     });
-//     // Send a ping to confirm a successful connection
-//     await client.db("admin").command({ ping: 1 });
-//     console.log(
-//       "Pinged your deployment. You successfully connected to MongoDB!"
-//     );
-//   } finally {
-//     // Ensures that the client will close when you finish/error
-//     // await client.close();
-//   }
-// }
-// run().catch(console.dir);
-
-// app.listen(port, () => {
-//   console.log("the server is running on port", port);
-// });
-
 require("dotenv").config();
 const express = require("express");
 const http = require("http");
@@ -107,7 +13,6 @@ app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  console.log(process.env.DB_USER);
   res.send({
     status: "success",
     message: "the server is running successfully.",
@@ -136,6 +41,7 @@ async function run() {
       .db("TaskManagementSystem")
       .collection("tasks");
 
+    // API to add a new user
     app.post("/users", async (req, res) => {
       const user = req.body;
       const email = user.email;
@@ -148,9 +54,10 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/tasks", async (req, res) => {
+    app.get("/tasks/:email", async (req, res) => {
+      const email = req.params.email;
       try {
-        const tasks = await tasksCollection.find().sort({ order: 1 }).toArray();
+        const tasks = await tasksCollection.find({ email: email }).toArray();
         res.send(tasks);
       } catch (error) {
         console.error("Error fetching tasks:", error);
@@ -158,6 +65,7 @@ async function run() {
       }
     });
 
+    // Socket.IO connection handler
     io.on("connection", (socket) => {
       console.log("Client connected:", socket.id);
 
@@ -169,56 +77,24 @@ async function run() {
           io.emit("tasksUpdated", updatedTasks);
         }
       });
-      socket.on("updateTasksOrder", async (updatedTasks) => {
+
+      socket.on("updateTask", async (updatedTask) => {
         try {
-          console.log("Received Updated Tasks:", updatedTasks);
-
-          // Update the order of tasks in the database
-          await tasksCollection.bulkWrite(
-            updatedTasks.map((task) => ({
-              updateOne: {
-                filter: { _id: task._id },
-                update: { $set: { order: task.order } },
-              },
-            }))
-          );
-
-          console.log("Tasks Updated in Database");
-
-          // Fetch the updated tasks from the database
-          const tasks = await tasksCollection
-            .find()
-            .sort({ order: 1 })
-            .toArray();
-
-          console.log("Fetched Updated Tasks from Database:", tasks);
-
-          // Broadcast the updated tasks to all clients
-          io.emit("tasksUpdated", tasks);
-
-          console.log("Broadcasted Updated Tasks to Clients");
-        } catch (error) {
-          console.error("Error updating task order:", error);
-        }
-      });
-
-      // Update task status
-      socket.on("updateTaskStatus", async (updatedTask) => {
-        try {
-          await tasksCollection.updateOne(
+          const result = await tasksCollection.updateOne(
             { _id: updatedTask._id },
-            { $set: { status: updatedTask.status, order: updatedTask.order } }
+            { $set: { status: updatedTask.status } }
           );
 
-          const tasks = await tasksCollection.find().toArray();
-          io.emit("tasksUpdated", tasks);
+          if (result.acknowledged) {
+            const updatedTasks = await tasksCollection.find().toArray();
+            io.emit("tasksUpdated", updatedTasks);
+          }
         } catch (error) {
-          console.error("Error updating task status:", error);
+          console.error("Error updating task:", error);
         }
       });
 
-      //   testing code ends
-
+      // Handle client disconnect
       socket.on("disconnect", () => {
         console.log("Client disconnected:", socket.id);
       });
@@ -228,9 +104,8 @@ async function run() {
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
+  } catch (error) {
+    console.error("MongoDB connection error:", error);
   }
 }
 
