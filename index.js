@@ -77,6 +77,26 @@ async function run() {
           io.emit("tasksUpdated", updatedTasks);
         }
       });
+      socket.on("editTask", async (taskData) => {
+        try {
+          const result = await tasksCollection.updateOne(
+            { _id: taskData._id },
+            {
+              $set: {
+                title: taskData.title,
+                description: taskData.description,
+              },
+            }
+          );
+
+          if (result.acknowledged) {
+            const updatedTasks = await tasksCollection.find().toArray();
+            io.emit("tasksUpdated", updatedTasks);
+          }
+        } catch (error) {
+          console.error("Error updating task:", error);
+        }
+      });
 
       socket.on("updateTask", async (updatedTask) => {
         try {
