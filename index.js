@@ -150,7 +150,7 @@ async function run() {
 
     app.get("/tasks", async (req, res) => {
       try {
-        const tasks = await tasksCollection.find().toArray();
+        const tasks = await tasksCollection.find().sort({ order: 1 }).toArray();
         res.send(tasks);
       } catch (error) {
         console.error("Error fetching tasks:", error);
@@ -169,24 +169,55 @@ async function run() {
           io.emit("tasksUpdated", updatedTasks);
         }
       });
-
-      socket.on("updateTask", async (updatedTask) => {
-        console.log(updatedTask.id);
+      socket.on("updateTasksOrder", async (updatedTasks) => {
         try {
-          const result = await tasksCollection.updateOne(
-            { _id: new ObjectId(updatedTask._id) },
-            { $set: { status: updatedTask.status } }
-          );
-          console.log(result);
+          console.log("Received Updated Tasks:", updatedTasks);
 
-          if (result.acknowledged) {
-            const updatedTasks = await tasksCollection.find().toArray();
-            io.emit("tasksUpdated", updatedTasks);
-          }
+          // Update the order of tasks in the database
+          await tasksCollection.bulkWrite(
+            updatedTasks.map((task) => ({
+              updateOne: {
+                filter: { _id: task._id },
+                update: { $set: { order: task.order } },
+              },
+            }))
+          );
+
+          console.log("Tasks Updated in Database");
+
+          // Fetch the updated tasks from the database
+          const tasks = await tasksCollection
+            .find()
+            .sort({ order: 1 })
+            .toArray();
+
+          console.log("Fetched Updated Tasks from Database:", tasks);
+
+          // Broadcast the updated tasks to all clients
+          io.emit("tasksUpdated", tasks);
+
+          console.log("Broadcasted Updated Tasks to Clients");
         } catch (error) {
-          console.error("Error updating task:", error);
+          console.error("Error updating task order:", error);
         }
       });
+
+      // Update task status
+      socket.on("updateTaskStatus", async (updatedTask) => {
+        try {
+          await tasksCollection.updateOne(
+            { _id: updatedTask._id },
+            { $set: { status: updatedTask.status, order: updatedTask.order } }
+          );
+
+          const tasks = await tasksCollection.find().toArray();
+          io.emit("tasksUpdated", tasks);
+        } catch (error) {
+          console.error("Error updating task status:", error);
+        }
+      });
+
+      //   testing code ends
 
       socket.on("disconnect", () => {
         console.log("Client disconnected:", socket.id);
